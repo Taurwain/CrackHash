@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.manager
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - WORKER1_URL=http://worker1:5001
+      - WORKER2_URL=http://worker2:5002
+      - WORKER3_URL=http://worker3:5003
+      - BATCH_SIZE=${BATCH_SIZE}
+      - REQUEST_TIMEOUT=300
+    networks:
+      - crackhash-network
+
+  worker1:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - WORKER_ID=worker1
+      - MANAGER_URL=http://manager:5000
+      - BATCH_SIZE=${BATCH_SIZE}
+    networks:
+      - crackhash-network
+    depends_on:
+      - manager
+
+  worker2:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "5002:5002"
+    environment:
+      - PORT=5002
+      - WORKER_ID=worker2
+      - MANAGER_URL=http://manager:5000
+      - BATCH_SIZE=${BATCH_SIZE}
+    networks:
+      - crackhash-network
+    depends_on:
+      - manager
+
+  worker3:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "5003:5003"
+    environment:
+      - PORT=5003
+      - WORKER_ID=worker3
+      - MANAGER_URL=http://manager:5000
+      - BATCH_SIZE=${BATCH_SIZE}
+    networks:
+      - crackhash-network
+    depends_on:
+      - manager
+
+networks:
+  crackhash-network:
+    driver: bridge

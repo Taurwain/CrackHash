@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CrackHash Manager Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { margin: 0; }
+
+        .hash-form { background: white; border-radius: 5px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #2c3e50; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        .form-group input:focus { outline: none; border-color: #3498db; }
+        .btn { background: #3498db; color: white; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #95a5a6; cursor: not-allowed; }
+
+        .result { margin-top: 15px; padding: 10px; border-radius: 4px; display: none; }
+        .result.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; display: block; }
+        .result.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; display: block; }
+
+        .stats { background: #34495e; padding: 15px; border-radius: 5px; margin-top: 10px; }
+        .stat-item { display: inline-block; margin-right: 20px; color: #ecf0f1; }
+        .stat-value { font-size: 1.2em; font-weight: bold; color: #3498db; }
+
+        .request-card { background: white; border-radius: 5px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .request-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+        .status-IN_PROGRESS { color: #e67e22; font-weight: bold; }
+        .status-READY { color: #27ae60; font-weight: bold; }
+        .status-ERROR { color: #c0392b; font-weight: bold; }
+
+        .progress-bar { width: 100%; height: 25px; background: #ecf0f1; border-radius: 12px; overflow: hidden; margin-top: 10px; position: relative; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #3498db, #2980b9); transition: width 0.3s; }
+        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #2c3e50; font-size: 0.9em; font-weight: bold; text-shadow: 0 1px 2px rgba(255,255,255,0.5); }
+
+        .workers { display: flex; gap: 10px; margin-top: 20px; margin-bottom: 30px; }
+        .worker { background: linear-gradient(135deg, #34495e, #2c3e50); color: white; padding: 15px; border-radius: 8px; flex: 1; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .worker.online { border-left: 4px solid #27ae60; }
+        .worker.offline { border-left: 4px solid #c0392b; opacity: 0.7; }
+        .worker h3 { margin: 0 0 5px 0; font-size: 1.1em; }
+        .status-badge { font-size: 0.8em; padding: 2px 8px; border-radius: 10px; display: inline-block; margin-top: 5px; }
+        .status-badge.online { background: #27ae60; }
+        .status-badge.offline { background: #c0392b; }
+
+        .word-found { background: #27ae60; color: white; padding: 2px 8px; border-radius: 12px; display: inline-block; margin: 2px; font-size: 0.9em; }
+
+        .no-requests { text-align: center; padding: 40px; background: white; border-radius: 5px; color: #7f8c8d; }
+        .timestamp { color: #95a5a6; font-size: 0.8em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CrackHash Manager Dashboard</h1>
+        </div>
+
+        <div class="hash-form">
+            <h2>Ввести хэш</h2>
+            <form id="crackForm">
+                <div class="form-group">
+                    <label for="hash">MD5 Hash:</label>
+                    <input type="text" id="hash" name="hash" required pattern="[a-fA-F0-9]{32}" title="32-символьный MD5 хэш (hex)">
+                </div>
+                <div class="form-group">
+                    <label for="maxLength">Максимальная длина слова:</label>
+                    <input type="number" id="maxLength" name="maxLength" min="1" max="6" value="4" required>
+                </div>
+                <button type="button" class="btn" id="submitBtn">Отправить на взлом</button>
+            </form>
+            <div id="result" class="result"></div>
+        </div>
+
+        <div class="workers">
+            {% for worker in workers %}
+            <div class="worker online">
+                <h3>Worker {{ loop.index }}</h3>
+                <div>{{ worker }}</div>
+                <span class="status-badge online">Online</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h2>Активные запросы</h2>
+
+        {% if requests %}
+            {% for request_id, req in requests.items() %}
+            <div class="request-card">
+                <h3>Request: {{ request_id }}</h3>
+                <p>
+                    <strong>Status:</strong>
+                    <span class="status-{{ req.status }}">{{ req.status }}</span>
+                </p>
+                <p><strong>Target Hash:</strong> <code>{{ req.target_hash }}</code></p>
+                <p><strong>Max Length:</strong> {{ req.max_length }}</p>
+                <p><strong>Words Found:</strong> {{ req.words_found|length }}</p>
+
+                {% if req.words_found %}
+                <div>
+                    <strong>Found words:</strong>
+                    {% for word in req.words_found %}
+                    <span class="word-found">{{ word }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ req.progress }}%"></div>
+                    <span class="progress-text">{{ "%.1f"|format(req.progress) }}%</span>
+                </div>
+
+                <div class="timestamp">
+                    Created: {{ req.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-requests">
+                <h3>Нет активных запросов</h3>
+                <p>Отправьте MD5 хэш через форму выше</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        document.getElementById('submitBtn').addEventListener('click', async function() {
+            const hash = document.getElementById('hash').value.trim();
+            const maxLength = document.getElementById('maxLength').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+
+            if (!hash.match(/^[a-fA-F0-9]{32}$/)) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 'Ошибка: введите корректный MD5 хэш (32 hex символа)';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Отправка...';
+
+            try {
+                const response = await fetch('/api/hash/crack', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        hash: hash.toLowerCase(),
+                        maxLength: parseInt(maxLength)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `Запрос отправлен! ID: <strong>${data.requestId}</strong><br>Страница обновится через 2 секунды...`;
+                    document.getElementById('hash').value = '';
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = 'Ошибка: ' + (data.error || 'Неизвестная ошибка');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 'Ошибка соединения: ' + error.message;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Отправить на взлом';
+            }
+        });
+
+        document.getElementById('crackForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+        });
+
+        setInterval(() => {
+            location.reload();
+        }, 5000);
+    </script>
+</body>
+</html>
